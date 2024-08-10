@@ -8,6 +8,7 @@ import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 from tensorboard.backend.event_processing import event_accumulator
 from torch.utils.data import DataLoader 
+from torch.nn.utils import prune
 #from .helper.coding import *
 #from .helper.network import *
 import random
@@ -39,6 +40,21 @@ def get_constant_lambda(initial_lr,final_lr,epochs,warmup_epoch):
         else:
             return 1
     return constant_lambda
+
+
+def _prune(network: nn.Module, prune_type:str, pruning_percentage:float):
+    norm_n = {'L1': 1, 'L2': 2}[prune_type]
+
+    for module in network.modules():
+        if type(module) is nn.Conv2d and module.out_channels > 3:
+            prune.ln_structured(module, 'weight', amount=pruning_percentage, dim=0, n=norm_n)
+
+
+def prune_remove(network):
+    for module in network.modules():
+        if type(module) is nn.Conv2d and module.out_channels > 3:
+            prune.remove(module, 'weight')
+
 
 class Trainer():
     
@@ -170,6 +186,7 @@ class Trainer():
         self.logger.info("Training start!")
         p_bar=tqdm(range(self.start_epoch,self.configs.epochs+1))
         self.event_before_training(network)
+        n_pruned = 0
         for idx_epoch in p_bar:
             train_losses_epoch=[]
             lr_now=self.optimizer.param_groups[0]["lr"]
@@ -201,7 +218,7 @@ class Trainer():
                     info_epoch+=" validation loss:{:.5f}".format(validation_losses_epoch_average)
                     self.recorder.add_scalar("{}/validation".format(loss_tag),validation_losses_epoch_average,idx_epoch)
                     self.event_after_validation_epoch(network,idx_epoch)
-            p_bar.set_description(info_epoch)
+            if idx_epoch % 50 == 0: p_bar.set_description(info_epoch)
             self.lr_scheduler.step()
             if idx_epoch%self.configs.save_epoch==0:
                 checkpoint_now={
@@ -211,6 +228,14 @@ class Trainer():
                     "lr_scheduler":self.lr_scheduler.state_dict()
                 }
                 torch.save(checkpoint_now,self.checkpoints_path+"checkpoint_{}.pt".format(idx_epoch))
+
+            if n_pruned < self.configs.n_prune and idx_epoch % self.configs.prune_interv == 0:
+                self.logger.info(f"Prunning ({n_pruned}) of type {self.configs.prune_type} and perc {self.configs.prune_perc*100}%")
+                n_pruned += 1
+                _prune(network, self.configs.prune_type, self.configs.prune_perc)
+
+        prune_remove(network)
+
         self.event_after_training(network)
         network.to("cpu")
         torch.save(network.state_dict(),self.project_path+"trained_network_weights.pt")
@@ -237,6 +262,12 @@ class Trainer():
         self.configs_handler.add_config_item("warmup_epoch",default_value=0,value_type=int,description="Number of epochs for learning rate warm up.")
         self.configs_handler.add_config_item("record_iteration_loss",default_value=False,value_type=bool,description="Whether to record iteration loss.")
         self.configs_handler.add_config_item("save_epoch",default_value_func=lambda configs:configs["epochs"]//10,value_type=int,description="Frequency of saving checkpoints.")
+
+        self.configs_handler.add_config_item("prune_type", default_value="L1", value_type=str, description="L1 or L2")
+        self.configs_handler.add_config_item("n_prune", default_value=0, value_type=int, description="Times to prune")
+        self.configs_handler.add_config_item("prune_interv", default_value=1, value_type=int, description="Number of epochs between each prune")
+        self.configs_handler.add_config_item("prune_perc", default_value=0.0, value_type=float, description="% to prune")
+
 
     def train_step(self,network:torch.nn.Module,batched_data,idx_batch:int,num_batches:int,idx_epoch:int,num_epoch:int):
         '''
