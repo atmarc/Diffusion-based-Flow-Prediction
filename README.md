@@ -1,3 +1,15 @@
+# ⚠️ Pruning experimentation fork ⚠️
+In this fork, we experiment with pruning techniques for CNN networks. We mainly focused on the Incompressible Wake Flow scenario. We implemented the script `trainer_pruning.py` that can be called with multiple parameters, to train the model with different pruning configurations. An example of this command could be:
+```
+python trainer_pruning.py --batch 25 --epochs 125000 --prune_warmup 20000 --dim_multipliers 2 2 --n_prune 22 --prune_type L2 --prune_perc 0.08 --prune_interv 1
+``` 
+
+There are more command examples in the `tasks.sh` script, which contains some of the executions done during our experimentation.
+
+We also implemented the `evaluate_models.ipynb` notebook to evaluate the models with the test dataset. Moreover, we used the `pruning_experiments.ipynb` for prototyping and checking the pruning parameters to obtain our desired model sizes. 
+
+
+
 <h1 align="center">
     Diffusion-based-Flow-Prediction
 </h1>

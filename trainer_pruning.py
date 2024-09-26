@@ -28,25 +28,38 @@ def load_dataset():
 
 def train(args):
     train_dataset = load_dataset()
-    network_configs = {
-        "attention_layers": [2, 3],
-        "condition_layers": [-2],
-        "depth_each_layer": 2,
+
+    if args.arch == "unet":
+        network_configs = {
         "dim_basic": 16,
-        "dim_condition": 3,
-        "dim_encoded_time": 8,
         "dim_in": 3,
-        # "dim_multipliers": [1, 2, 4, 4],
         "dim_multipliers": args.dim_multipliers,
         "dim_out": 3,
-        "heads_attention": 4,
-        "linear_attention": False,
         "skip_connection_scale": 0.707,
-        "use_input_condition": True
-    }
+        }
+        network = UNet(**network_configs)
+        network.show_current_configs()
+            
+    else:
+        network_configs = {
+            "attention_layers": [2, 3],
+            "condition_layers": [-2],
+            "depth_each_layer": 2,
+            "dim_basic": 16,
+            "dim_condition": 3,
+            "dim_encoded_time": 8,
+            "dim_in": 3,
+            # "dim_multipliers": [1, 2, 4, 4],
+            "dim_multipliers": args.dim_multipliers,
+            "dim_out": 3,
+            "heads_attention": 4,
+            "linear_attention": False,
+            "skip_connection_scale": 0.707,
+            "use_input_condition": True
+        }
 
-    network = AifNet(**network_configs)
-    network.show_current_configs()
+        network = AifNet(**network_configs)
+        network.show_current_configs()
 
     diffusion_trainer = DiffusionTrainer()
     train_configs = {
@@ -65,11 +78,11 @@ def train(args):
         "save_epoch": 5000,
         "lr": args.lr,
         "final_lr": args.final_lr,
-        
         "prune_type": args.prune_type,
         "n_prune": args.n_prune,
         "prune_perc": args.prune_perc,
-        "prune_interv": args.prune_interv
+        "prune_interv": args.prune_interv,
+        "prune_warmup": args.prune_warmup
     }
 
     diffusion_trainer.train_from_scratch(network, train_dataset, **train_configs)
@@ -81,14 +94,14 @@ def parse_args():
     parser.add_argument('--batch', default=25, type=int, help='batch size')
     parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
     parser.add_argument('--final_lr', default=1e-5, type=float, help='learning rate')
-    parser.add_argument('--device', default=0, type=int, help='Index of GPU to use for training')
-    
-    parser.add_argument('--prune_type',   default="L2", type=str)
-    parser.add_argument('--n_prune',      default=0, type=int)
-    parser.add_argument('--prune_interv', default=1, type=int)
-    parser.add_argument('--prune_perc',   default=0.0, type=float)
-
+    parser.add_argument('--device', default=0, type=int, help='Index of GPU to use for training')    
+    parser.add_argument('--arch', default="aifnet", type=str, help="Options: unet, aifnet")
     parser.add_argument('--dim_multipliers', default=[1, 2, 4, 4], type=int, nargs="+")
+    parser.add_argument('--prune_type', default="L2", type=str)
+    parser.add_argument('--n_prune', default=0, type=int)
+    parser.add_argument('--prune_interv', default=1, type=int)
+    parser.add_argument('--prune_perc', default=0.0, type=float)
+    parser.add_argument('--prune_warmup', default=0, type=int, help="Number of epochs to wait until we start pruning.")
     
     args = parser.parse_args()
     params = {}

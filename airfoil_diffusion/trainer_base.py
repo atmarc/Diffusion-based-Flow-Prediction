@@ -52,7 +52,7 @@ def _prune(network: nn.Module, prune_type:str, pruning_percentage:float):
 
 def prune_remove(network):
     for module in network.modules():
-        if type(module) is nn.Conv2d and module.out_channels > 3:
+        if type(module) is nn.Conv2d and module.out_channels > 3 and prune.is_pruned(module):  
             prune.remove(module, 'weight')
 
 
@@ -229,12 +229,23 @@ class Trainer():
                 }
                 torch.save(checkpoint_now,self.checkpoints_path+"checkpoint_{}.pt".format(idx_epoch))
 
-            if n_pruned < self.configs.n_prune and idx_epoch % self.configs.prune_interv == 0:
+            if idx_epoch >= self.configs.prune_warmup and \
+                n_pruned < self.configs.n_prune and \
+                idx_epoch % self.configs.prune_interv == 0:
+                
                 self.logger.info(f"Prunning ({n_pruned}) of type {self.configs.prune_type} and perc {self.configs.prune_perc*100}%")
                 n_pruned += 1
                 _prune(network, self.configs.prune_type, self.configs.prune_perc)
 
+        # End save
         prune_remove(network)
+        checkpoint_now={
+            "epoch":idx_epoch,
+            "network":network.state_dict(),
+            "optimizer":self.optimizer.state_dict(),
+            "lr_scheduler":self.lr_scheduler.state_dict()
+        }
+        torch.save(checkpoint_now,self.checkpoints_path+"model.pt")
 
         self.event_after_training(network)
         network.to("cpu")
@@ -267,6 +278,7 @@ class Trainer():
         self.configs_handler.add_config_item("n_prune", default_value=0, value_type=int, description="Times to prune")
         self.configs_handler.add_config_item("prune_interv", default_value=1, value_type=int, description="Number of epochs between each prune")
         self.configs_handler.add_config_item("prune_perc", default_value=0.0, value_type=float, description="% to prune")
+        self.configs_handler.add_config_item("prune_warmup", default_value=0, value_type=int, description="Number of epochs to wait until we start pruning.")
 
 
     def train_step(self,network:torch.nn.Module,batched_data,idx_batch:int,num_batches:int,idx_epoch:int,num_epoch:int):
