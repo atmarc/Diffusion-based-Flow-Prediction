@@ -8,6 +8,8 @@ There are more command examples in the `tasks.sh` script, which contains some of
 
 We also implemented the `evaluate_models.ipynb` notebook to evaluate the models with the test dataset. Moreover, we used the `pruning_experiments.ipynb` for prototyping and checking the pruning parameters to obtain our desired model sizes. 
 
+With the aim of pruning during the training process, we also modified the `airfoil_difusion/trainer_base.py` file, where the training loop is implemented.
+
 
 
 <h1 align="center">
